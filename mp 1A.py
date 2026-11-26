@@ -1,5 +1,6 @@
 import csv
 import os
+from datetime import datetime
 
 
 NAMA_FILE = "dataset_tiket_kereta.readable.csv"
@@ -67,15 +68,20 @@ def menu_pencarian_kereta(data_kereta, role="PENUMPANG"):
 			print(f"- {asal}")
 
 		stasiun_asal = input("\nMasukkan Stasiun Asal: ").strip()
+		stasiun_asal_bersih = "".join(c for c in stasiun_asal if c.isalnum()).lower()
 
 		data_asal = [
 			row
 			for row in data_kereta
-			if row["Stasiun Asal"].lower() == stasiun_asal.lower()]
+			if "".join(c for c in row["Stasiun Asal"] if c.isalnum()).lower() == stasiun_asal_bersih]
 
 		if not data_asal:
 			print(f"Maaf, tidak ada jadwal keberangkatan dari '{stasiun_asal}'.")
-			if not tanya_lanjut("Apakah masih mau pesan/cek kursi lagi?"):
+			pesan_ulang = (
+				"Apakah masih mau pesan kursi lagi?"
+				if role.upper() == "PENUMPANG"
+				else "Apakah masih mau cek kursi lagi?")
+			if not tanya_lanjut(pesan_ulang):
 				break
 			continue
 
@@ -107,7 +113,11 @@ def menu_pencarian_kereta(data_kereta, role="PENUMPANG"):
 
 		if not kereta_sesuai_budget:
 			print(f"\nMaaf, tidak tersedia ada kereta untuk jadwal tersebut dengan harga di bawah Rp {harga_maks:,}.")
-			if not tanya_lanjut("Apakah masih mau pesan/cek kursi lagi?"):
+			pesan_ulang = (
+				"Apakah masih mau pesan kursi lagi?"
+				if role.upper() == "PENUMPANG"
+				else "Apakah masih mau cek kursi lagi?")
+			if not tanya_lanjut(pesan_ulang):
 				break
 			continue
 
@@ -134,37 +144,44 @@ def menu_pencarian_kereta(data_kereta, role="PENUMPANG"):
 		print(f"Harga Tiket    : Rp {kereta_final['Harga Tiket']:,}")
 		print("-" * 40)
 
-		if (kereta_final["Status"].lower() == "tersedia"
+		if (
+			kereta_final["Status"].lower() == "tersedia"
 			and kereta_final["Kursi Tersedia"] > 0):
+			
 			print(f"STATUS         : TERSEDIA (Sisa {kereta_final['Kursi Tersedia']} kursi)")
 			print("-" * 40)
 
-			while True:
-				try:
-					jumlah_pesan = int(input("Masukkan jumlah kursi yang mau dipesan (0 untuk batal): "))
-					if jumlah_pesan == 0:
-						print("Pemesanan dibatalkan.")
-						break
-					elif 1 <= jumlah_pesan <= kereta_final["Kursi Tersedia"]:
-						kereta_final["Kursi Tersedia"] -= jumlah_pesan
-						if kereta_final["Kursi Tersedia"] == 0:
-							kereta_final["Status"] = "Penuh"
-						simpan_semua_data(data_kereta)
-						total_bayar = jumlah_pesan * kereta_final["Harga Tiket"]
-						print("\nPemesanan berhasil!")
-						print(f"Jumlah Kursi Dipesan : {jumlah_pesan} kursi")
-						print(f"Total Harga          : Rp {total_bayar:,}")
-						print(f"Sisa Kursi Sekarang  : {kereta_final['Kursi Tersedia']} kursi")
-						break
-					else:
-						print(f"Jumlah tidak valid! Maksimal kursi tersedia adalah {kereta_final['Kursi Tersedia']}.")
-				except ValueError:
-					print("Input harus berupa angka!")
+			if role.upper() == "PENUMPANG":
+				while True:
+					try:
+						jumlah_pesan = int(input("Masukkan jumlah kursi yang mau dipesan (0 untuk batal): "))
+						if jumlah_pesan == 0:
+							print("Pemesanan dibatalkan.")
+							break
+						elif 1 <= jumlah_pesan <= kereta_final["Kursi Tersedia"]:
+							kereta_final["Kursi Tersedia"] -= jumlah_pesan
+							if kereta_final["Kursi Tersedia"] == 0:
+								kereta_final["Status"] = "Penuh"
+							simpan_semua_data(data_kereta)
+							total_bayar = jumlah_pesan * kereta_final["Harga Tiket"]
+							print("\nPemesanan berhasil!")
+							print(f"Jumlah Kursi Dipesan : {jumlah_pesan} kursi")
+							print(f"Total Harga          : Rp {total_bayar:,}")
+							print(f"Sisa Kursi Sekarang  : {kereta_final['Kursi Tersedia']} kursi")
+							break
+						else:
+							print(f"Jumlah tidak valid! Maksimal kursi tersedia adalah {kereta_final['Kursi Tersedia']}.")
+					except ValueError:
+						print("Input harus berupa angka!")
 		else:
 			print("STATUS         : TIDAK TERSEDIA / PENUH")
 			print("-" * 40)
 
-		if not tanya_lanjut("Apakah masih mau pesan kursi lagi?"):
+		pesan_ulang = (
+			"Apakah masih mau pesan kursi lagi?"
+			if role.upper() == "PENUMPANG"
+			else "Apakah masih mau cek kursi lagi?")
+		if not tanya_lanjut(pesan_ulang):
 			break
 
 
@@ -193,11 +210,21 @@ def menu_admin(data_kereta):
 				sub_pilihan = input("Pilih jenis ringkasan (1-4): ").strip()
 
 				if sub_pilihan == "1":
-					tgl_batas = input("Masukkan tanggal batas (YYYY-MM-DD): ").strip()
+					while True:
+						tgl_batas = input("Masukkan tanggal batas (YYYY-MM-DD atau YYYYMMDD): ").strip()
+						if len(tgl_batas) == 8 and tgl_batas.isdigit():
+							tgl_batas = f"{tgl_batas[:4]}-{tgl_batas[4:6]}-{tgl_batas[6:]}"
+						try:
+							datetime.strptime(tgl_batas, "%Y-%m-%d")
+							break
+						except ValueError:
+							print("Format tanggal tidak valid! Harap masukkan tanggal yang benar (contoh: 2026-05-15 atau 20260515).")
+
 					kereta_berlalu = [
 						row
 						for row in data_kereta
 						if row["Tanggal Berangkat"] < tgl_batas]
+
 					print(f"\n--- DAFTAR KERETA SEBELUM TANGGAL {tgl_batas} ({len(kereta_berlalu)} jadwal) ---")
 					if not kereta_berlalu:
 						print("Tidak ada data kereta sebelum tanggal tersebut.")
@@ -206,17 +233,16 @@ def menu_admin(data_kereta):
 							print(f"- {row['Nama Kereta']} ({row['Stasiun Asal']} -> {row['Stasiun Tujuan']}) | Tgl: {row['Tanggal Berangkat']} {row['Jam Berangkat']} | Kelas: {row['Kelas']} | Sisa Kursi: {row['Kursi Tersedia']}")
 
 				elif sub_pilihan == "2":
-					nama_cari = input("Masukkan nama kereta: ").strip()
+					daftar_kereta = sorted(list(set(row["Nama Kereta"] for row in data_kereta)))
+					nama_cari = pilih_dari_daftar("PILIH NAMA KERETA", daftar_kereta)
 					hasil_kereta = [
 						row
 						for row in data_kereta
-						if nama_cari.lower() in row["Nama Kereta"].lower()]
+						if row["Nama Kereta"] == nama_cari]
+
 					print(f"\n--- RINGKASAN KERETA '{nama_cari.upper()}' ---")
-					if not hasil_kereta:
-						print("Nama kereta tidak ditemukan.")
-					else:
-						for row in hasil_kereta:
-							print(f"- {row['Nama Kereta']} ({row['Stasiun Asal']} -> {row['Stasiun Tujuan']}) | Tanggal: {row['Tanggal Berangkat']} | Kelas: {row['Kelas']} | Kursi Tersedia: {row['Kursi Tersedia']} (Awal: {row['Kursi Awal']})")
+					for row in hasil_kereta:
+						print(f"- {row['Nama Kereta']} ({row['Stasiun Asal']} -> {row['Stasiun Tujuan']}) | Tanggal: {row['Tanggal Berangkat']} | Kelas: {row['Kelas']} | Kursi Tersedia: {row['Kursi Tersedia']} (Awal: {row['Kursi Awal']})")
 
 				elif sub_pilihan == "3":
 					urutan_kursi = sorted(data_kereta, key=lambda x: x["Kursi Tersedia"])
@@ -237,14 +263,50 @@ def menu_admin(data_kereta):
 		elif pilihan == "2":
 			while True:
 				print("\n--- Tambah Data Kereta Baru ---")
-				nama = input("Nama Kereta: ")
-				asal = input("Stasiun Asal: ")
-				tujuan = input("Stasiun Tujuan: ")
-				tanggal = input("Tanggal Berangkat (YYYY-MM-DD): ")
-				jam = input("Jam Berangkat (HH:MM): ")
-				kelas = input("Kelas (Eksekutif/Bisnis/Ekonomi): ")
-				harga = int(input("Harga Tiket: "))
-				kursi = int(input("Kursi Tersedia: "))
+				nama = input("Nama Kereta: ").strip()
+				asal = input("Stasiun Asal: ").strip()
+				tujuan = input("Stasiun Tujuan: ").strip()
+
+				while True:
+					tanggal = input("Tanggal Berangkat: ").strip()
+					if len(tanggal) == 8 and tanggal.isdigit():
+						tanggal = f"{tanggal[:4]}-{tanggal[4:6]}-{tanggal[6:]}"
+					try:
+						datetime.strptime(tanggal, "%Y-%m-%d")
+						break
+					except ValueError:
+						print("Format tanggal tidak valid! Harap masukkan tanggal yang benar (contoh: 2026-05-15 atau 20260515).")
+
+				while True:
+					jam = input("Jam Berangkat (HH:MM atau HHMM): ").strip()
+					if len(jam) == 4 and jam.isdigit():
+						jam = f"{jam[:2]}:{jam[2:]}"
+					try:
+						jam_obj = datetime.strptime(jam, "%H:%M")
+						jam = jam_obj.strftime("%H:%M")
+						break
+					except ValueError:
+						print("Format jam tidak valid! Masukkan jam yang benar antara 00:00 - 23:59 (contoh: 08:30 atau 0830).")
+
+				kelas = pilih_dari_daftar("PILIH KELAS KERETA", ["Eksekutif", "Bisnis", "Ekonomi"])
+
+				while True:
+					try:
+						harga = int(input("Harga Tiket: "))
+						if harga > 0:
+							break
+						print("Harga tiket harus lebih dari 0 (tidak boleh minus/nol)!")
+					except ValueError:
+						print("Input harus berupa angka!")
+
+				while True:
+					try:
+						kursi = int(input("Kursi Tersedia: "))
+						if kursi > 0:
+							break
+						print("Jumlah kursi harus angka positif (minimal 1, tidak boleh minus)!")
+					except ValueError:
+						print("Input harus berupa angka!")
 
 				data_baru = {
 					"S.no.": str(len(data_kereta)),
@@ -259,9 +321,11 @@ def menu_admin(data_kereta):
 					"Kursi Awal": kursi,
 					"Status": "Tersedia" if kursi > 0 else "Penuh",
 					"Tahun Operasional": "2026",
-					"Umur Kereta Tahun": "0",}
+					"Umur Kereta Tahun": "0",
+				}
 				data_kereta.append(data_baru)
 				simpan_semua_data(data_kereta)
+
 				print("Data berhasil ditambahkan!")
 
 				if not tanya_lanjut("Apakah masih ingin menambah jadwal kereta lagi?"):
@@ -299,7 +363,6 @@ def main():
 			break
 		else:
 			print("Pilihan tidak valid, silakan masukkan 1, 2, 3, atau 4.")
-
 
 if __name__ == "__main__":
 	main()
